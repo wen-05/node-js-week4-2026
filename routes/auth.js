@@ -29,9 +29,33 @@ const router = express.Router();
 //   2. 密碼加密可使用 bcrypt 的 genSalt 與 hash 
 //   3. 加密完成後，將新使用者（包含 id、email、加密後 password）存進 users，並 return 201 跟對應輸出訊息
 // - 注意：handler 是 async function
-/* 作答區
-router.METHOD('PATH', async (req, res) => { ... });
-*/
+
+router.post('/register', async (req, res) => {
+  const { email, password } = req.body;
+  
+  if (!email || !password) {
+    return res.status(400).json({
+      status: 'false',
+      message: '欄位未填寫正確'
+    });
+  }
+
+  const isExistEmail = users.some(user => user.email === email);
+  if (isExistEmail) {
+    return res.status(400).json({
+      status: 'false',
+      message: 'Email 已被註冊'
+    });
+  }
+
+  const hashPassword = await bcrypt.hash(password, 10);
+  users.push({ id: nextId++, email, password: hashPassword });
+  
+  return res.status(201).json({
+    status: 'success',
+    message: '註冊成功'
+  });
+});
 
 // ───────────────────────────────────────────────────────────
 // TODO 任務三：POST /login
@@ -46,9 +70,38 @@ router.METHOD('PATH', async (req, res) => { ... });
 //   3. 用 jwt.sign 簽出 token，payload 帶入使用者的 id 和 email，secret 使用 process.env.JWT_SECRET，有效期設為 30 天
 //   4. token 簽出後，回應 200 跟對應輸出訊息
 // - 注意：handler 是 async function
-/* 作答區
-router.METHOD('PATH', async (req, res) => { ... });
-*/
+
+router.post('/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  const user = users.find(user => user.email === email);
+
+  if (!user) {
+    return res.status(401).json({
+      status: 'false',
+      message: '帳號或密碼錯誤'
+    });
+  }
+
+  const isMatch = await bcrypt.compare(password, user.password);
+  if (!isMatch) {
+    return res.status(401).json({
+      status: 'false',
+      message: '帳號或密碼錯誤'
+    });
+  }
+
+  const token = jwt.sign(
+    { id: user.id, email: user.email },
+    process.env.JWT_SECRET,
+    { expiresIn: '30d' }
+  );
+
+  return res.status(200).json({
+    status: 'success',
+    token
+  });
+});
 
 // ───────────────────────────────────────────────────────────
 // TODO 任務四：GET /me（受保護）
@@ -57,8 +110,12 @@ router.METHOD('PATH', async (req, res) => { ... });
 // GET /me
 // - 保護：路由第二個參數掛上 verifyToken 守門員（驗過後會將使用者資料掛到 req.user）
 // - 輸出：200 + { status: 'success', user: ... }
-/* 作答區
-router.METHOD('PATH', middleware, (req, res) => { ... });
-*/
+
+router.get('/me', verifyToken, (req, res) => {
+  return res.status(200).json({
+    status: 'success',
+    user: req.user
+  });
+});
 
 module.exports = router;
